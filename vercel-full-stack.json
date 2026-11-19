@@ -1,0 +1,35 @@
+{
+  "name": "lvs-scanner-vercel-full",
+  "version": 2,
+  "buildCommand": "cd frontend && npm install && npm run build",
+  "outputDirectory": "frontend/dist",
+  "public": false,
+  "framework": "vite",
+  "regions": ["iad1"],
+  "functions": {
+    "api/index.py": {
+      "memory": 3008,
+      "maxDuration": 60,
+      "runtime": "python3.11"
+    }
+  },
+  "env": {
+    "VITE_API_BASE_URL": "",
+    "PYTHONUNBUFFERED": "1"
+  },
+  "build": {
+    "env": {
+      "VITE_API_BASE_URL": ""
+    }
+  },
+  "routes": [
+    {
+      "src": "/api/(.*)",
+      "dest": "/api/index.py"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/frontend/dist/$1"
+    }
+  ]
+}

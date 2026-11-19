@@ -1,0 +1,17 @@
+# Railway Deployment Configuration
+# Deploy this entire repository to Railway
+
+[build]
+builder = "nixpacks"
+buildCommand = "npm install && cd frontend && npm install && npm run build && cd ../backend && pip install -r requirements.txt"
+
+[deploy]
+# Railway will detect this as a monorepo and handle appropriately
+startCommand = "cd backend && uvicorn main:app --host 0.0.0.0 --port $PORT"
+
+[env]
+PYTHONUNBUFFERED = "true"
+DEBUG = "false"
+DATABASE_URL = "sqlite:///./scan_history.db"
+MAX_TIMEOUT = "300"
+MAX_CONCURRENT_SCANS = "5"

@@ -1,0 +1,24 @@
+services:
+  - type: web
+    name: lvs-scanner-backend
+    env: python
+    plan: free
+    region: oregon
+    buildCommand: "pip install -r requirements.txt"
+    startCommand: "uvicorn main:app --host 0.0.0.0 --port $PORT"
+    autoDeploy: false
+    envVars:
+      - key: PYTHONUNBUFFERED
+        value: "true"
+      - key: DEBUG
+        value: "false"
+      - key: DATABASE_URL
+        value: "sqlite:///./scan_history.db"
+      - key: ALLOWED_ORIGINS
+        fromService:
+          name: lvs-scanner-frontend
+          property: url
+      - key: MAX_TIMEOUT
+        value: "300"
+      - key: MAX_CONCURRENT_SCANS
+        value: "5"
