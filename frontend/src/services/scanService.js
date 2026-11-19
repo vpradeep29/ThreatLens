@@ -1,60 +1,71 @@
+
 import apiClient from '../utils/api';
 
-// Test connection to target
 export const testConnection = async (target) => {
-  try {
-    const response = await apiClient.post('/api/test-connection', { target });
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || { status: 'error', message: error.message };
-  }
+  const response = await apiClient.post('/api/test-connection', { target });
+  return response.data;
 };
 
-// Get scan history
 export const getScanHistory = async () => {
-  try {
-    const response = await apiClient.get('/api/history');
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || { status: 'error', message: error.message };
-  }
+  const response = await apiClient.get('/api/history');
+  return response.data;
 };
 
-// Start WebSocket scan
-export const startWebSocketScan = (target, scanType = 'full', onMessage, onError) => {
-  const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const apiBase = import.meta.env.VITE_API_BASE_URL || '';
-  let wsUrl;
-  
-  if (apiBase.startsWith('http')) {
-    wsUrl = apiBase.replace('http', 'ws') + '/ws/scan';
-  } else {
-    wsUrl = `${wsProtocol}//${window.location.host}/ws/scan`;
-  }
-  
-  const ws = new WebSocket(wsUrl);
-  
+export const startWebSocketScan = (
+  target,
+  scanType,
+  onMessage,
+  onError
+) => {
+  const apiBase = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+
+  const wsBase = apiBase
+    .replace(/^https:/, 'wss:')
+    .replace(/^http:/, 'ws:')
+    .replace(/\/$/, '');
+
+  const ws = new WebSocket(`${wsBase}/ws/scan`);
+
   ws.onopen = () => {
     ws.send(JSON.stringify({
       target,
-      scan_type: scanType,
+      scan_type: scanType
     }));
   };
-  
+
   ws.onmessage = (event) => {
-    onMessage(JSON.parse(event.data));
+    let data;
+
+    try {
+      data = JSON.parse(event.data);
+    } catch {
+      // Backend may send plain-text scan logs.
+      data = event.data;
+    }
+
+    onMessage?.(data);
   };
-  
-  ws.onerror = (error) => {
-    onError(error);
+
+  ws.onerror = () => {
+    onError?.(new Error('WebSocket connection failed.'));
   };
-  
+
+  ws.onclose = (event) => {
+    if (event.code !== 1000) {
+      onError?.(
+        new Error(`Scan connection closed unexpectedly (code ${event.code}).`)
+      );
+    }
+  };
+
   return ws;
 };
 
-// Close WebSocket connection
 export const closeWebSocket = (ws) => {
-  if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.close();
+  if (ws && (
+    ws.readyState === WebSocket.OPEN ||
+    ws.readyState === WebSocket.CONNECTING
+  )) {
+    ws.close(1000, 'Client closed connection');
   }
 };

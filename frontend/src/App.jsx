@@ -1,5 +1,7 @@
+
 import React from 'react';
 import { Routes, Route } from 'react-router-dom';
+
 import Sidebar from './components/Sidebar';
 import Globe from './components/Globe';
 import Dashboard from './pages/Dashboard';
@@ -9,10 +11,11 @@ import Settings from './pages/Settings';
 
 function App() {
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
+    <div className="threatlens-layout">
       <Globe />
       <Sidebar />
-      <main style={{ marginLeft: '250px', flex: 1, padding: '2rem' }}>
+
+      <main className="threatlens-main">
         <Routes>
           <Route path="/" element={<Dashboard />} />
           <Route path="/scanner" element={<Scanner />} />

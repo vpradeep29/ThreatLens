@@ -1,188 +1,322 @@
-import React, { useState } from 'react';
-import { ShieldCheck, Target, AlertTriangle, Wifi, Activity, Globe, Server } from 'lucide-react';
+
+import React, { useEffect, useState } from 'react';
+import {
+  ShieldCheck, Target, AlertTriangle, Wifi,
+  Activity, Globe, Server, Clock, RefreshCw,
+  ArrowUpRight, Shield
+} from 'lucide-react';
+import apiClient from '../utils/api';
 
 export default function Dashboard() {
   const [testUrl, setTestUrl] = useState('');
   const [testResult, setTestResult] = useState(null);
   const [isTesting, setIsTesting] = useState(false);
 
+  const [history, setHistory] = useState([]);
+  const [backendStatus, setBackendStatus] = useState('checking');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+
+  const loadDashboard = async () => {
+    setLoading(true);
+    setLoadError('');
+
+    try {
+      const [historyResponse, healthResponse] = await Promise.allSettled([
+        apiClient.get('/api/history'),
+        apiClient.get('/health')
+      ]);
+
+      if (historyResponse.status === 'fulfilled' &&
+        historyResponse.value.data.status === 'success') {
+        setHistory(historyResponse.value.data.data || []);
+      } else {
+        setLoadError('Unable to load scan history.');
+      }
+
+      setBackendStatus(
+        healthResponse.status === 'fulfilled' &&
+          healthResponse.value.data.status === 'healthy'
+          ? 'online'
+          : 'offline'
+      );
+    } catch {
+      setLoadError('Unable to retrieve dashboard information.');
+      setBackendStatus('offline');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadDashboard();
+  }, []);
+
   const handleTestConnection = async (e) => {
     e.preventDefault();
-    if (!testUrl) return;
-    
+    if (!testUrl.trim()) return;
+
     setIsTesting(true);
     setTestResult(null);
+
     try {
-      const apiBase = import.meta.env.VITE_API_BASE_URL || '';
-      const res = await fetch(`${apiBase}/api/test-connection`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target: testUrl })
+      const response = await apiClient.post('/api/test-connection', {
+        target: testUrl.trim()
       });
-      const data = await res.json();
-      setTestResult(data);
-    } catch (err) {
-      setTestResult({ status: 'error', message: 'Failed to connect to backend server.' });
+      setTestResult(response.data);
+    } catch (error) {
+      setTestResult(
+        error.response?.data || {
+          status: 'error',
+          message: 'Unable to connect to the backend server.'
+        }
+      );
     } finally {
       setIsTesting(false);
     }
   };
 
+  const totalScans = history.length;
+  const averageRisk = totalScans
+    ? Math.round(history.reduce((sum, item) => sum + (Number(item.risk_score) || 0), 0) / totalScans)
+    : null;
+  const totalFindings = history.reduce(
+    (sum, item) => sum + (Number(item.findings_count) || 0), 0
+  );
+
+  const recentScans = history.slice(0, 5);
+
+  const formatDate = (value) => {
+    const date = new Date(value);
+    return Number.isNaN(date.getTime()) ? 'Unknown date' : date.toLocaleString();
+  };
+
+  const riskColor = (score) => {
+    if (score > 70) return 'var(--severity-critical)';
+    if (score > 40) return 'var(--severity-medium)';
+    return 'var(--severity-low)';
+  };
+
   return (
     <div className="dashboard-page fade-in">
-      {/* Background Ambience */}
       <div className="bg-orb orb-1"></div>
       <div className="bg-orb orb-2"></div>
 
-      {/* Premium Header */}
       <header className="dashboard-header">
         <div>
-          <div className="dashboard-label">INTELLIGENCE NETWORK</div>
+          <div className="dashboard-label">THREAT INTELLIGENCE PLATFORM</div>
           <h1 className="dashboard-title">Command Center</h1>
-          <p className="dashboard-subtitle">Real-time threat monitoring, endpoint reachability, and global reconnaissance telemetry.</p>
+          <p className="dashboard-subtitle">
+            Monitor scan activity, review security findings and assess authorized targets.
+          </p>
         </div>
+
         <div className="live-status">
-          <div className="pulse-dot"></div>
-          System Online
+          <span
+            className="pulse-dot"
+            style={{
+              background: backendStatus === 'online'
+                ? '#22c55e'
+                : backendStatus === 'offline'
+                  ? '#ef4444'
+                  : '#eab308'
+            }}
+          />
+          {backendStatus === 'online'
+            ? 'Backend Online'
+            : backendStatus === 'offline'
+              ? 'Backend Offline'
+              : 'Checking Backend'}
         </div>
       </header>
 
-      {/* Stats Grid with Hover Animations */}
-      <div className="stats-grid">
-        <div className="stat-card" style={{ '--glow': 'rgba(34, 197, 94, 0.4)', '--accent': '#22c55e' }}>
+      <section className="stats-grid">
+        <div className="stat-card" style={{ '--accent': '#3b82f6', '--glow': 'rgba(59,130,246,0.2)' }}>
           <div className="card-glow"></div>
           <div className="stat-top">
-            <div className="icon-wrap"><ShieldCheck size={28} /></div>
-            <span className="status-badge" style={{ background: 'rgba(34,197,94,0.15)', color: '#22c55e' }}>SECURE</span>
+            <div className="icon-wrap"><Target size={25} /></div>
+            <span className="status-badge">SCAN HISTORY</span>
           </div>
           <div className="stat-content">
-            <p>System Status</p>
-            <h2>Nominal</h2>
+            <p>Total Scans</p>
+            <h2>{loading ? '...' : totalScans}</h2>
           </div>
-          <div className="stat-wave" style={{ borderColor: 'rgba(34,197,94,0.15)' }}></div>
         </div>
 
-        <div className="stat-card" style={{ '--glow': 'rgba(59, 130, 246, 0.4)', '--accent': '#3b82f6' }}>
+        <div className="stat-card" style={{ '--accent': '#f59e0b', '--glow': 'rgba(245,158,11,0.2)' }}>
           <div className="card-glow"></div>
           <div className="stat-top">
-            <div className="icon-wrap"><Target size={28} /></div>
+            <div className="icon-wrap"><AlertTriangle size={25} /></div>
+            <span className="status-badge">RECORDED</span>
           </div>
           <div className="stat-content">
-            <p>Targets Scanned</p>
-            <h2>12</h2>
+            <p>Total Findings</p>
+            <h2>{loading ? '...' : totalFindings}</h2>
           </div>
-          <div className="stat-wave" style={{ borderColor: 'rgba(59,130,246,0.15)' }}></div>
         </div>
 
-        <div className="stat-card" style={{ '--glow': 'rgba(239, 68, 68, 0.4)', '--accent': '#ef4444' }}>
+        <div className="stat-card" style={{ '--accent': '#22c55e', '--glow': 'rgba(34,197,94,0.2)' }}>
           <div className="card-glow"></div>
           <div className="stat-top">
-            <div className="icon-wrap"><AlertTriangle size={28} /></div>
-            <span className="status-badge" style={{ background: 'rgba(239,68,68,0.15)', color: '#ef4444' }}>3 ACTIVE</span>
+            <div className="icon-wrap"><Shield size={25} /></div>
+            <span className="status-badge">SCAN METRIC</span>
           </div>
           <div className="stat-content">
-            <p>Active Threats</p>
-            <h2>3</h2>
+            <p>Average Risk Score</p>
+            <h2>{loading ? '...' : averageRisk === null ? '—' : `${averageRisk}/100`}</h2>
           </div>
-          <div className="stat-wave" style={{ borderColor: 'rgba(239,68,68,0.15)' }}></div>
         </div>
-      </div>
+      </section>
+
+      {loadError && (
+        <div className="error-message" style={{ marginBottom: '1rem', padding: '1rem' }}>
+          {loadError}
+          <button onClick={loadDashboard} className="btn-secondary" style={{ marginLeft: '1rem' }}>
+            <RefreshCw size={15} /> Retry
+          </button>
+        </div>
+      )}
 
       <div className="dashboard-grid">
-        {/* Main Panel: Reachability & Activity */}
         <div className="glass-panel large-panel">
           <div className="panel-header">
             <div>
               <h3>Target Reachability Tester</h3>
-              <p>Verify endpoint connectivity before initiating a scan.</p>
+              <p>Check endpoint connectivity before initiating an authorized scan.</p>
             </div>
             <div className="panel-icon"><Wifi size={24} color="#60a5fa" /></div>
           </div>
 
-          <form onSubmit={handleTestConnection} style={{ display: 'flex', gap: '1rem', marginBottom: '1.5rem', background: 'rgba(0,0,0,0.2)', padding: '1rem', borderRadius: '16px', border: '1px solid rgba(255,255,255,0.05)' }}>
-            <input 
-              type="text" 
-              placeholder="e.g. testphp.vulnweb.com" 
+          <form
+            onSubmit={handleTestConnection}
+            style={{
+              display: 'flex', gap: '1rem', marginBottom: '1.5rem',
+              background: 'rgba(0,0,0,0.2)', padding: '1rem',
+              borderRadius: '16px', border: '1px solid var(--glass-border)'
+            }}
+          >
+            <input
+              type="text"
+              placeholder="Enter an authorized target URL"
               value={testUrl}
               onChange={(e) => setTestUrl(e.target.value)}
-              style={{ flex: 1, padding: '0.85rem', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.1)', background: 'rgba(0,0,0,0.4)', color: '#fff', fontSize: '1rem' }}
+              required
+              style={{ flex: 1, minWidth: 0 }}
             />
-            <button type="submit" className="btn-primary" disabled={isTesting} style={{ padding: '0.85rem 1.5rem', borderRadius: '12px', minWidth: '160px', background: 'linear-gradient(135deg, #3b82f6, #2563eb)' }}>
-              {isTesting ? <span className="loader" style={{width: 18, height: 18, borderWidth: 2}}></span> : <Server size={18} />}
-              <span style={{ marginLeft: '0.5rem' }}>{isTesting ? 'Testing...' : 'Ping Target'}</span>
+            <button type="submit" className="btn-primary" disabled={isTesting}>
+              {isTesting
+                ? <span className="loader" style={{ width: 18, height: 18, borderWidth: 2 }} />
+                : <Server size={18} />}
+              <span>{isTesting ? 'Testing...' : 'Test Target'}</span>
             </button>
           </form>
 
           {testResult && (
-            <div style={{ marginBottom: '2rem', padding: '1.25rem', borderRadius: '16px', background: testResult.status === 'success' ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)', border: `1px solid ${testResult.status === 'success' ? 'rgba(34,197,94,0.3)' : 'rgba(239,68,68,0.3)'}`, display: 'flex', alignItems: 'center', gap: '1rem' }}>
-              <div style={{ padding: '0.75rem', borderRadius: '50%', background: testResult.status === 'success' ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)', color: testResult.status === 'success' ? '#22c55e' : '#ef4444' }}>
-                {testResult.status === 'success' ? <ShieldCheck size={24} /> : <AlertTriangle size={24} />}
-              </div>
-              <div>
-                <h4 style={{ color: testResult.status === 'success' ? '#22c55e' : '#ef4444', marginBottom: '0.25rem' }}>{testResult.status === 'success' ? 'Reachability Verified' : 'Reachability Failed'}</h4>
-                <p style={{ color: 'rgba(255,255,255,0.8)', fontSize: '0.95rem' }}>{testResult.message}</p>
-                {testResult.server && <p style={{ color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem', marginTop: '0.25rem' }}>Detected Server: {testResult.server}</p>}
+            <div
+              className="glass-panel"
+              style={{
+                marginBottom: '1.5rem', padding: '1rem',
+                borderColor: testResult.status === 'success' ? '#22c55e' : '#ef4444'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '0.75rem' }}>
+                {testResult.status === 'success'
+                  ? <ShieldCheck color="#22c55e" size={24} />
+                  : <AlertTriangle color="#ef4444" size={24} />}
+                <div>
+                  <strong>{testResult.status === 'success' ? 'Connection Successful' : 'Connection Failed'}</strong>
+                  <p style={{ color: 'var(--text-secondary)', marginTop: '0.25rem' }}>
+                    {testResult.message}
+                  </p>
+                  {testResult.server && (
+                    <p style={{ color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+                      Server: {testResult.server}
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
           )}
 
-          <div style={{ marginTop: '2.5rem' }}>
-            <h3 style={{ fontSize: '1.1rem', color: 'rgba(255,255,255,0.9)', marginBottom: '1rem' }}>Recent Telemetry Activity</h3>
-            <div className="activity-list">
-              <div className="activity-item">
-                <div className="activity-dot" style={{ background: '#22c55e', boxShadow: '0 0 10px #22c55e' }}></div>
-                <div className="activity-info">
-                  <h4>testphp.vulnweb.com</h4>
-                  <p>Full OWASP Scan completed successfully</p>
-                </div>
-                <span>2 mins ago</span>
+          <div style={{ marginTop: '2rem' }}>
+            <div className="panel-header">
+              <div>
+                <h3>Recent Scan Activity</h3>
+                <p>Latest records retrieved from the scan history database.</p>
               </div>
-              <div className="activity-item">
-                <div className="activity-dot" style={{ background: '#3b82f6', boxShadow: '0 0 10px #3b82f6' }}></div>
-                <div className="activity-info">
-                  <h4>192.168.1.105</h4>
-                  <p>Network Port Scan finished</p>
-                </div>
-                <span>15 mins ago</span>
-              </div>
-              <div className="activity-item">
-                <div className="activity-dot" style={{ background: '#ef4444', boxShadow: '0 0 10px #ef4444' }}></div>
-                <div className="activity-info">
-                  <h4>demo.testfire.net</h4>
-                  <p>SQL Injection Vulnerability Detected</p>
-                </div>
-                <span>1 hour ago</span>
-              </div>
+              <Activity size={21} color="#60a5fa" />
             </div>
+
+            {loading ? (
+              <p style={{ color: 'var(--text-secondary)' }}>Loading scan records...</p>
+            ) : recentScans.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '2rem', color: 'var(--text-secondary)' }}>
+                <Activity size={35} style={{ marginBottom: '0.75rem', opacity: 0.5 }} />
+                <p>No scan activity recorded yet.</p>
+                <p style={{ fontSize: '0.85rem', marginTop: '0.4rem' }}>
+                  Start a scan to see results here.
+                </p>
+              </div>
+            ) : (
+              <div className="activity-list">
+                {recentScans.map((scan) => (
+                  <div className="activity-item" key={scan.id}>
+                    <div className="activity-dot" style={{ background: riskColor(scan.risk_score) }}></div>
+                    <div className="activity-info">
+                      <h4>{scan.target}</h4>
+                      <p>
+                        {scan.scan_type?.toUpperCase()} scan · {scan.findings_count} findings
+                      </p>
+                    </div>
+                    <span>{formatDate(scan.scan_date)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Side Panels: Radar and Security Score */}
         <div className="side-panels">
-          <div className="glass-panel mini-panel" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            <div className="mini-top" style={{ width: '100%', justifyContent: 'center' }}>
+          <div className="glass-panel mini-panel">
+            <div className="mini-top">
               <Globe size={20} color="#22c55e" />
-              <h3 style={{ fontSize: '1.1rem', color: '#fff' }}>Active Radar</h3>
+              <h3>Scanner Overview</h3>
             </div>
-            <div className="radar-circle">
-              <div className="radar-sweep"></div>
-              <div className="radar-center"></div>
+            <div className="metric">
+              <h2>{loading ? '...' : totalScans}</h2>
+              <p>Saved scan records</p>
             </div>
-            <p style={{ marginTop: '1.5rem', color: 'rgba(255,255,255,0.5)', fontSize: '0.85rem' }}>Scanning local subnet...</p>
+            <div style={{ marginTop: '1.25rem', color: 'var(--text-secondary)', fontSize: '0.85rem' }}>
+              <p><Clock size={14} style={{ display: 'inline', marginRight: '0.4rem' }} />Latest recorded scan</p>
+              <strong style={{ display: 'block', marginTop: '0.5rem', color: 'var(--text-primary)' }}>
+                {recentScans.length ? formatDate(recentScans[0].scan_date) : 'No scans yet'}
+              </strong>
+            </div>
           </div>
-          
+
           <div className="glass-panel mini-panel">
             <div className="mini-top">
               <ShieldCheck size={20} color="#3b82f6" />
-              <h3 style={{ fontSize: '1.1rem', color: '#fff' }}>Security Score</h3>
+              <h3>Risk Overview</h3>
             </div>
             <div className="metric">
-              <h2>98<span style={{ fontSize: '1.5rem', color: 'rgba(255,255,255,0.5)' }}>/100</span></h2>
-              <p>+2.4% vs last week</p>
+              <h2>{loading ? '...' : averageRisk === null ? '—' : averageRisk}</h2>
+              <p>Average recorded risk score</p>
             </div>
-            <div style={{ height: '4px', background: 'rgba(255,255,255,0.1)', borderRadius: '2px', marginTop: '1rem', overflow: 'hidden' }}>
-              <div style={{ height: '100%', width: '98%', background: '#3b82f6', boxShadow: '0 0 10px #3b82f6' }}></div>
+            <div style={{
+              height: '5px', background: 'rgba(255,255,255,0.1)',
+              borderRadius: '5px', marginTop: '1rem', overflow: 'hidden'
+            }}>
+              <div style={{
+                height: '100%',
+                width: `${averageRisk ?? 0}%`,
+                background: averageRisk === null ? '#64748b' : riskColor(averageRisk),
+                transition: 'width 0.4s ease'
+              }} />
             </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: '0.75rem', marginTop: '0.5rem' }}>
+              Historical average · Not a live security rating
+            </p>
           </div>
         </div>
       </div>
